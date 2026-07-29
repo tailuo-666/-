@@ -1,3 +1,6 @@
+# 视频地址
+【7月29日】 https://www.bilibili.com/video/BV1Yc326EEn4/?share_source=copy_web&vd_source=61fbdbbef4583ca4ffe501ef391faab5
+
 # 本地 ReAct Agent
 
 一个不依赖 LangChain 或 LangGraph 的本地单用户 Agent。项目手写实现 ReAct 循环、工具注册、Markdown 长期记忆、SQLite 会话与 Trace，并由 FastAPI 提供浏览器工作台和 REST API。
