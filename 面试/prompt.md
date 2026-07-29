@@ -1,0 +1,260 @@
+#总目标：**从零实现一个最小可用 Agent**
+---
+##框架：手搓ReAct
+具体如下：
+- 推理（Thought）：为什么要这么做、下一步选什么工具、预期看到什么。
+- 行动（Action）：调用某个工具（如搜索、代码执行），并给出参数。
+- 观察（Observation）：环境/工具返回的结果。
+循环多次，直到模型给出 Final Answer。
+
+---
+伪代码如下：
+```
+输入: question, tools, llm, max_steps
+初始化: trajectory = []
+
+for step in 1..max_steps:
+    prompt = build_react_prompt(question, tools, trajectory)
+    text = llm.generate(prompt)
+
+    if "Final Answer:" in text:
+        return extract_final_answer(text)
+    
+    thought = parse_thought(text)      # 从 Thought: ... 解析
+    action = parse_action(text)        # 从 Action: tool[arg] 解析
+    obs = tools.execute(action)        # 真实环境反馈
+    trajectory.append((thought, action, obs))
+
+return "达到最大步数仍未结束" 或 强制总结
+```
+---
+Loop大致步骤
+  Step one 接收用户输入
+  Step two 判断是直接回复，还是调用工具
+  Step three 调用工具
+  Step four 根据工具结果判断是继续loop，还是返回结果给用户
+
+##工具
+
+###编写说明
+**需实现工具注册机制（每个工具包含名称、描述、参数 Schema），LLM 基于 Schema 自主决策调用。需实现 LLM 输出的解析逻辑，提取思考过程、工具调用或最终答案。**
+
+description 是模型判断是否调用、如何填参的主要依据。应写：功能一句话、何时用、何时不要用、参数含义与格式、返回值语义（若影响后续推理）。
+- 避免两个工具描述语义重叠；重叠时加「优先使用 A 当…，否则 B」。
+- 对易混参数（如 user_id vs email）举例说明。
+- 英文或中文与模型服务语言一致可减少混淆。
+- 描述太长怎么办？分层——核心描述保持短；细节放 parameter.description
+
+参数宜少而精、类型明确；能用枚举就不用自由文本；日期时间统一 ISO 8601；避免「万能字符串」承载多种含义。多参数强依赖时，可拆成链式多个工具，降低单次 JSON 复杂度。
+
+工具返回值会作为 tool 消息内容进入上下文。应稳定、可解析：优先 JSON 字符串；错误用统一结构 { "error": "..." }，便于模型纠错。
+
+网络与模型都可能失败。策略包括：可重试错误（429、5xx）指数退避；不可重试（4xx 参数错）把错误给模型；工具内部超时；熔断防止拖垮依赖。
+
+可参考以下代码：
+TOOLS = [
+    {"name": "bash",       "description": "Run a shell command.", ...},
+    {"name": "read_file",  "description": "Read file contents.",  ...},
+    {"name": "write_file", "description": "Write content to file.", ...},
+    {"name": "edit_file",  "description": "Replace text in file once.", ...},
+    {"name": "glob",       "description": "Find files by pattern.", ...},
+]
+
+
+每个工具有自己的实现函数：
+
+def run_read(path, limit=None):
+    lines = safe_path(path).read_text().splitlines()
+    if limit:
+        lines = lines[:limit]
+    return "\n".join(lines)
+
+---
+
+工具分发：
+TOOL_HANDLERS = {
+    "bash":       run_bash,
+    "read_file":  run_read,
+    "write_file": run_write,
+    "edit_file":  run_edit,
+    "glob":       run_glob,
+}
+
+循环里只改了一行——从硬编码 run_bash 变成查表：
+for block in response.content:
+    if block.type == "tool_use":
+        handler = TOOL_HANDLERS[block.name]    # 查表
+        output = handler(**block.input)         # 调用
+        results.append(...)
+加一个工具 = 在 TOOLS 数组加一条 + 在 TOOL_HANDLERS 字典加一行。循环不变。
+
+---
+###具体工具：
+calculator（加减乘除）、search（搜集信息，可 mock）、weather（可mock）、extract_memory(提取记忆)
+
+##对extract_memory(提取记忆)和load_memory（按需加载记忆）的说明：
+
+
+
+分为以下2种记忆：用户偏好、用户纠正
+
+记忆存储:Markdown文件+索引
+每个记忆是一个.md 文件，YAML frontmatter记录元数据:
+示例：
+```
+---
+name: user-preference-tabs
+description: User prefers tabs for indentation
+type: user
+---
+User prefers using tabs, not spaces, for indentation.
+**Why:** Consistency with existing codebase conventions.
+**How to apply:** Always use tabs when writing or editing files.
+```
+
+MEMORY.md是索引，一行一个链接:
+
+```
+[user-preference-tabs](user-preference-tabs.md) - User prefers tabs for indentation
+```
+写入新记忆时自动重建索引:
+
+```
+def write_memory_file(name, mem_type, description, body):
+slug = name.lower().replace(" ", "-")
+filepath = MEMORY_DIR / f"{slug}.md"
+filepath.write_text(
+f"---\nname: {name} \ndescription: {description} \ntype: {mem_type} \n---\n\n{body} \n"
+rebuild_index()
+```
+相关记忆按需注入。 每次用户请求开始时，load_memories() 把最近对话和记忆目录（name + description）一起发给 LLM 做一次轻量 side-query，选出相关的文件名，再读文件内容临时注入到当前 user turn。最多 5 条，控制开销。
+```
+def select_relevant_memories(messages, max_items=5):
+    files = list_memory_files()
+    if not files:
+        return []
+
+    # Build catalog: "0: user-preference-tabs — User prefers tabs..."
+    catalog = "\n".join(f"{i}: {f['name']} — {f['description']}" for i, f in enumerate(files))
+    
+    response = client.messages.create(model=MODEL, messages=[{"role": "user",
+        "content": f"Select relevant memory indices. Return JSON array.\n\n"
+                   f"Recent conversation:\n{recent}\n\nMemory catalog:\n{catalog}"}],
+        max_tokens=200)
+    text = extract_text(response.content).strip()
+    indices = json.loads(re.search(r'\[.*?\]', text).group())
+    return [files[i]["filename"] for i in indices if 0 <= i < len(files)]
+
+```
+如果 side-query 失败（API 错误、JSON 解析失败），降级到关键词匹配 name + description。
+
+写入：每轮结束后提取
+用户不会每次都说"记住这个"。偏好通常散落在正常对话中："用 tab 比空格好"、"以后都用单引号"。
+
+```
+extract_memories() 在每轮结束时运行，条件是模型停止且没有 tool_use（说明对话告一段落）：
+
+In agent_loop:
+if response.stop_reason != "tool_use":
+    extract_memories(pre_compress)   # 从压缩前快照提取新记忆
+    consolidate_memories()       # 检查是否需要整理
+    return
+    
+```
+
+
+提取前先检查已有记忆，避免重复。提取 prompt 要求 LLM 返回 {name, type, description, body} 的 JSON 数组，只有确实有新信息时才写文件。
+```
+def extract_memories(messages):
+    dialogue = format_recent_messages(messages[-10:])
+    existing = "\n".join(f"- {m['name']}: {m['description']}" for m in list_memory_files())
+
+    prompt = (
+        "Extract user preferences, constraints, or project facts.\n"
+        "Return JSON array: [{name, type, description, body}].\n"
+        "If nothing new or already covered, return [].\n\n"
+        f"Existing memories:\n{existing}\n\nDialogue:\n{dialogue[:4000]}"
+    )
+    # ... parse response, write files ...
+```
+整理：低频合并去重
+记忆文件会积累。consolidate_memories() 在文件数达到阈值（默认 10）时触发，让 LLM 去重、合并矛盾、淘汰过时记忆：
+
+
+```
+CONSOLIDATE_THRESHOLD = 10
+
+def consolidate_memories():
+    files = list_memory_files()
+    if len(files) < CONSOLIDATE_THRESHOLD:
+        return  # 太少，不值得整理
+    # Send all memories to LLM, get back deduplicated list
+    # Replace all files with consolidated results
+```
+
+## 对话管理
+
+### 功能目标
+
+  用户 A 开了窗口 1：让 Agent 查天气记待办
+
+  用户 A 开了窗口 2：让 Agent 写周报记待办
+
+  这两个窗口应该是独立的session，用户A可以随时接着窗口1/2和继续聊，彼此不会影响。
+
+### 具体实现
+
+利用会话ID进行区分。会话信息需要存入数据库、前端UI可感知是否选中某段回答的内容。一个会话有多轮对话，因此对话也需要有对应的ID，一问一答。
+
+系统提示词采用动态拼接，工具、提示词这些保持不变。动态拼接记忆、用户提问、本轮会话的历史对话、日志（动态判断是否需要），如果识别到“选中某段回答的内容”也需再次拼接“引用段的原文”。
+
+## 上下文管理
+  一个会话最大轮次限制：10。这里只做简单的压缩实现：超过10轮则保留第一轮和后三轮的对话问答。中间过程用llm结构化压缩，再拼接。
+
+##  基本异常处理
+比如：agent如果返回上下文溢出，413错误，紧急结构化压缩。然后读取最近几次的文件、工具结果。
+
+## 工具调用trace或执行日志
+每一轮工具调用都会采用hook实现trace或者日志的写入。而这些日志、trace可作为突发中断恢复的依据。
+
+- Trace：一次用户请求从头到尾。
+- Span：其中一个单元（一次 LLM 调用、一次工具执行、一次检索）。
+- 父子关系：span_id / parent_span_id 构成树，还原 Agent 的思考链路与并行分支。
+
+这里简单介绍流程：
+本地存储了对话记录、会话记录，访问请求携带会话ID，服务端识别会话ID，而会话ID关联对话记录，对话记录有一个状态字段，如果最近的会话记录状态显示：“执行中”（意味着上次服务中断了），则代码工作流去查询这个对话的trace，拼接trace或者日志的结果，结合这个对话的提问，进行resume()。实现状态的有序化。这个拼接也属于动态拼接系统提示词的一部分。
+
+##模型API配置
+```
+
+
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_API_KEY",
+    base_url="https://api.longxiadev.store/v1",
+)
+
+response = client.responses.create(
+    model="gpt-5.5",
+    input="只回复 ok",
+    store=False,
+)
+
+print(response.output_text)
+
+```
+
+
+api-key用这个：sk-dacd98a9de315f7608619c2ebd309c78e7c1bdc95a2715016c11cd87f1a8ce7b
+注意对模型的回答进行截取
+
+
+
+## 其他说明
+
+运行环境用：D:\conda_envs\dachuang
+
+数据库用sqlite就行
+
+前端界面随便就行，和接口对接好，能展示即可
