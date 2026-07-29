@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ReAct Workbench</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="workbench">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">R</span>
+          <div>
+            <h1>REACT</h1>
+            <p>LOCAL WORKBENCH</p>
+          </div>
+        </div>
+        <button id="new-session" class="new-session" type="button" title="新建会话">
+          <span aria-hidden="true">+</span><span>新建会话</span>
+        </button>
+        <nav id="sessions" class="sessions" aria-label="会话列表"></nav>
+        <div class="sidebar-footer">
+          <span id="model-dot" class="status-dot"></span>
+          <span id="model-status">检查模型配置...</span>
+        </div>
+      </aside>
+
+      <section class="conversation-shell">
+        <header class="conversation-header">
+          <div>
+            <p class="eyebrow">AGENT SESSION</p>
+            <h2 id="session-title">选择或新建会话</h2>
+          </div>
+          <span id="session-state" class="session-state">待命</span>
+        </header>
+
+        <div id="messages" class="messages" aria-live="polite">
+          <div class="empty-state">
+            <span class="empty-index">01</span>
+            <h3>从一个问题开始</h3>
+            <p>模型会在需要时调用本地工具，并将结果作为下一步观察。</p>
+          </div>
+        </div>
+
+        <div id="quote-chip" class="quote-chip" hidden>
+          <span id="quote-preview"></span>
+          <button id="clear-quote" type="button" title="取消引用" aria-label="取消引用">x</button>
+        </div>
+        <form id="composer" class="composer">
+          <textarea id="prompt" rows="2" maxlength="12000" placeholder="输入问题，Enter 发送，Shift + Enter 换行" aria-label="消息内容"></textarea>
+          <button id="send" type="submit" title="发送消息" aria-label="发送消息">
+            <span aria-hidden="true">↑</span>
+          </button>
+        </form>
+      </section>
+
+      <aside class="trace-panel">
+        <header>
+          <p class="eyebrow">EXECUTION</p>
+          <h2>工具记录</h2>
+        </header>
+        <div id="trace-content" class="trace-content">
+          <p class="trace-empty">选择一条回答以查看本轮工具调用。</p>
+        </div>
+      </aside>
+    </main>
+    <template id="message-template">
+      <article class="message">
+        <div class="message-meta">
+          <span class="message-role"></span>
+          <time></time>
+        </div>
+        <div class="message-content"></div>
+        <button class="view-trace" type="button">查看工具记录</button>
+      </article>
+    </template>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

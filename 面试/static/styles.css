@@ -1,0 +1,120 @@
+:root {
+  --paper: #f5f3ed;
+  --paper-deep: #e8e4da;
+  --ink: #18221f;
+  --muted: #6b736e;
+  --line: #c9c7bd;
+  --forest: #135c4a;
+  --signal: #e5532d;
+  --sky: #96c8d4;
+  --night: #1c2825;
+  font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image: linear-gradient(rgba(24, 34, 31, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(24, 34, 31, .035) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+button, textarea { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: wait; opacity: .56; }
+
+.workbench {
+  display: grid;
+  grid-template-columns: 248px minmax(420px, 1fr) 294px;
+  min-height: 100vh;
+}
+
+.sidebar, .trace-panel { background: rgba(232, 228, 218, .86); }
+.sidebar { border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 24px 16px 16px; }
+.trace-panel { border-left: 1px solid var(--line); padding: 28px 18px; }
+
+.brand { display: flex; align-items: center; gap: 11px; padding: 0 4px 23px; }
+.brand-mark { display: grid; width: 32px; height: 32px; place-items: center; color: var(--paper); background: var(--forest); font-size: 20px; font-weight: 700; }
+.brand h1 { margin: 0; font-family: "Courier New", monospace; font-size: 17px; letter-spacing: 2px; }
+.brand p, .eyebrow { margin: 3px 0 0; color: var(--muted); font-family: "Courier New", monospace; font-size: 10px; letter-spacing: 1px; }
+
+.new-session { display: flex; align-items: center; justify-content: center; gap: 9px; height: 42px; border: 1px solid var(--forest); color: var(--paper); background: var(--forest); font-family: "Courier New", monospace; font-size: 12px; letter-spacing: .5px; }
+.new-session span:first-child { font-size: 22px; font-family: Georgia, serif; line-height: 1; }
+.new-session:hover { background: var(--night); }
+.sessions { display: grid; gap: 4px; padding-top: 18px; overflow: auto; }
+.session-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; width: 100%; border: 0; border-left: 2px solid transparent; padding: 10px 8px; color: var(--ink); text-align: left; background: transparent; }
+.session-item:hover, .session-item.is-active { border-left-color: var(--signal); background: rgba(255, 255, 255, .45); }
+.session-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
+.session-time { padding-top: 3px; color: var(--muted); font-family: "Courier New", monospace; font-size: 10px; }
+.sidebar-footer { display: flex; align-items: center; gap: 7px; margin-top: auto; padding: 16px 4px 2px; color: var(--muted); font-family: "Courier New", monospace; font-size: 10px; }
+.status-dot { width: 7px; height: 7px; background: var(--signal); border-radius: 50%; }
+.status-dot.is-ready { background: var(--forest); }
+
+.conversation-shell { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; min-width: 0; }
+.conversation-header { display: flex; justify-content: space-between; align-items: start; min-height: 107px; border-bottom: 1px solid var(--line); padding: 27px clamp(24px, 4vw, 56px) 20px; }
+.conversation-header h2, .trace-panel h2 { margin: 6px 0 0; font-size: 22px; font-weight: 500; letter-spacing: 0; }
+.session-state { margin-top: 8px; border: 1px solid var(--line); padding: 5px 8px; color: var(--muted); font-family: "Courier New", monospace; font-size: 10px; letter-spacing: .7px; }
+.session-state.is-running { border-color: var(--signal); color: var(--signal); animation: blink 1s steps(2, end) infinite; }
+
+.messages { overflow-y: auto; padding: 34px clamp(24px, 5vw, 76px); }
+.empty-state { max-width: 390px; margin: 16vh auto 0; border-top: 3px solid var(--forest); padding-top: 16px; }
+.empty-index { color: var(--signal); font-family: "Courier New", monospace; font-size: 12px; }
+.empty-state h3 { margin: 7px 0; font-size: 27px; font-weight: 500; }
+.empty-state p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.7; }
+.message { position: relative; max-width: 700px; margin: 0 auto 28px; padding: 0 0 18px; border-bottom: 1px solid var(--line); animation: arrive .24s ease-out both; }
+.message.is-user { margin-left: 0; }
+.message.is-assistant { margin-right: 0; }
+.message-meta { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--muted); font-family: "Courier New", monospace; font-size: 10px; letter-spacing: .9px; }
+.is-assistant .message-role { color: var(--forest); }
+.is-user .message-role { color: var(--signal); }
+.message-content { white-space: pre-wrap; font-size: 16px; line-height: 1.75; }
+.message-content blockquote { margin: 0 0 12px; border-left: 3px solid var(--sky); padding: 5px 13px; color: var(--muted); font-size: 14px; }
+.message.is-running .message-content { color: var(--muted); font-style: italic; }
+.message.is-failed .message-content { color: #9a301c; }
+.view-trace { margin-top: 12px; border: 0; border-bottom: 1px solid var(--forest); padding: 0 0 3px; color: var(--forest); background: transparent; font-family: "Courier New", monospace; font-size: 10px; letter-spacing: .6px; }
+.view-trace:hover { color: var(--signal); border-color: var(--signal); }
+
+.quote-chip { display: flex; align-items: center; gap: 8px; margin: 0 clamp(24px, 5vw, 76px) 8px; border-left: 3px solid var(--sky); padding: 6px 8px 6px 11px; color: var(--muted); background: rgba(150, 200, 212, .19); font-size: 12px; }
+.quote-chip span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.quote-chip button { margin-left: auto; border: 0; color: var(--muted); background: transparent; font-family: "Courier New", monospace; }
+.composer { display: grid; grid-template-columns: 1fr 46px; gap: 10px; border-top: 1px solid var(--line); padding: 14px clamp(24px, 4vw, 56px) 21px; background: rgba(245, 243, 237, .82); }
+.composer textarea { width: 100%; resize: none; border: 1px solid var(--line); border-radius: 0; padding: 10px 12px; color: var(--ink); outline: none; background: rgba(255, 255, 255, .5); font-size: 14px; line-height: 1.45; }
+.composer textarea:focus { border-color: var(--forest); box-shadow: inset 3px 0 var(--forest); }
+.composer button { width: 46px; height: 46px; align-self: end; border: 0; color: var(--paper); background: var(--signal); font-size: 25px; line-height: 1; }
+.composer button:hover { background: var(--forest); }
+
+.trace-panel header { border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+.trace-content { padding-top: 17px; }
+.trace-empty { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.trace-item { border-bottom: 1px solid var(--line); padding: 10px 0; }
+.trace-item summary { display: flex; justify-content: space-between; color: var(--forest); font-family: "Courier New", monospace; font-size: 12px; cursor: pointer; }
+.span-status { color: var(--muted); font-size: 10px; }
+.trace-item pre { overflow-x: auto; margin: 10px 0 0; padding: 10px; color: #27453d; background: rgba(255, 255, 255, .45); font-family: "Courier New", monospace; font-size: 10px; line-height: 1.55; white-space: pre-wrap; }
+.inline-error { max-width: 700px; margin: 12px auto; color: #9a301c; font-family: "Courier New", monospace; font-size: 12px; }
+
+@keyframes arrive { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes blink { 50% { opacity: .42; } }
+
+@media (max-width: 1000px) {
+  .workbench { grid-template-columns: 206px minmax(0, 1fr); }
+  .trace-panel { display: none; }
+}
+
+@media (max-width: 680px) {
+  .workbench { display: block; }
+  .sidebar { height: auto; min-height: 0; border-right: 0; border-bottom: 1px solid var(--line); padding: 14px; }
+  .brand { padding-bottom: 12px; }
+  .sessions { display: flex; overflow-x: auto; padding-top: 12px; }
+  .session-item { flex: 0 0 160px; }
+  .sidebar-footer { display: none; }
+  .conversation-shell { min-height: calc(100vh - 205px); }
+  .conversation-header { min-height: 82px; padding: 18px 20px; }
+  .conversation-header h2 { max-width: 230px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 19px; }
+  .messages { padding: 22px 20px; }
+  .composer { padding: 12px 20px 18px; }
+  .quote-chip { margin: 0 20px 7px; }
+}
